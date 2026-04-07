@@ -1,0 +1,12 @@
+
+%datos = salidaB1m;
+%% REvisar normalizacion del "tiempo" -- "Al optimizar"
+[b1m, ] = normaliza_curva(salidaB1m, N);
+[b2m,nb2m] = normaliza_curva(salidaB2m, N);
+[b11m,nb11m] = normaliza_curva(salidaB11m, N);
+[b1r,nb1r] = normaliza_curva(salidaB1r, N);
+[b2r,nb2r] = normaliza_curva(salidaB2r, N);
+[b11r,nb11r] = normaliza_curva(salidaB11r, N);
+[b1n,nb1n] = normaliza_curva(salidaB1n, N);
+[b2n,nb2n] = normaliza_curva(salidaB2n, N);
+[b11n,nb11n] = normaliza_curva(salidaB11n, N);

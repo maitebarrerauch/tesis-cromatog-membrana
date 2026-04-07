@@ -1,0 +1,367 @@
+% Optimización hibrida multidimensional
+% [datos,~]=datos_new_model(1)
+% %sinteticos
+% sinteticosConcatenado
+addpath(genpath('config/'))
+config_path
+%[datos,~]=datos_new_model(1)
+
+
+%call_generateData
+%% StrucData: load data experiments and selección feasible elution
+% N:#ptos curva --> para que todos los experimentos tengan el mismo tamano
+% de datos de entrada
+% Ejemplo de interpolar curva-data, out={new_interpolation,normalized_new_interpolation}
+N = 300 % observacion - menos puntos --> menor cómputo, menor precisión (hasta que pto.), es
+%más optimo, la optimización es eficaz?
+structData
+
+%% Selecction train-dataset
+%X_train = Datab11
+X_train = Datab2
+
+% X_train_extendida = rotateMatrix(X_train', 20);
+% 
+% X_train_merge = [X_train,X_train_extendida'];
+% 
+% 
+% figure;
+% pcolor(X_train(:,:));
+% figure;
+% pcolor(X_train_extendida(:,:));
+% figure;
+% pcolor(X_train_merge(:,:));
+
+%% train model of generator-synthetic data
+data_synt_multidim_vae
+
+%% Generation synthetic Data
+numNewSamples = 100;
+sim_generate_vae;
+X_Synt = M
+ figure;
+% mesh(X_Synt(:,:));
+% 
+% % % 
+% %Seleccionar la curva 50 del conjunto sintético
+% curva = X_Synt(:, 31);  % Selecciona la curva 10
+% N = length(curva);  % Número de puntos en la curva
+% %t_sint = linspace(0, N-1, N);  % Eje de tiempo generado
+% t_ref = tNb11(:);   
+% % Combina el tiempo y la curva 
+% datos_sinteticos = [t_ref, curva(:)];
+% % Asegurarse de que datos_sinteticos sea de tipo double
+% datos_sinteticos = double(datos_sinteticos);
+% figure; 
+% plot(X_Synt(:, 31), 'LineWidth', 1.5); % curva 1 
+% xlabel('Índice (tiempo o posición)'); 
+% ylabel('Valor'); 
+% title('Curva 31 del conjunto sintético'); 
+% grid on; 
+% % Ahora puedes guardarlo correctamente en formato ASCII
+% %save('datos/curva_sintetica_31_b1.txt', 'datos_sinteticos', '-ascii', '-double');
+
+
+
+% === Orientación + N + copia sin shift ===
+if size(X_Synt,1) < size(X_Synt,2)
+    X_Synt = X_Synt.'; 
+end
+N = size(X_Synt,1);
+mid = ceil(N/2);
+X_Synt_raw = X_Synt;   % copia sin shift/soft
+
+% % === Centrar según valor y pendiente inicial ===
+% Wpre = max(7, 2*floor(N/60)+1);
+% umbral_ini = 0.02;      % 2% del máximo
+% umbral_pend = 0.005;    % pendiente mínima (~0.5%)
+% centrada = false(1, size(X_Synt,2));  % vector lógico de centrado
+% 
+% for k = 1:size(X_Synt,2)
+%     y = X_Synt(:,k);
+%     ys = smoothdata(y, 'gaussian', Wpre);
+%     ymax = max(ys);
+%     y0 = ys(1);
+% 
+%     % Pendiente inicial (primeros puntos)
+%     n_ini = min(10, floor(N/20));
+%     pend_ini = mean(diff(ys(1:n_ini)));
+%     pend_rel = pend_ini / ymax;
+% 
+%     % Criterio de centrado:
+%     if (y0 > 0.05 * ymax) && (pend_rel > 0.01)
+%         [~, loc] = max(ys);
+%         X_Synt(:,k) = circshift(y, mid - loc);
+%         centrada(k) = true;
+%     end
+% end
+% === Centrar según valor y pendiente inicial (versión mejorada) ===
+Wpre = max(7, 2*floor(N/60)+1);   % ventana de suavizado
+umbral_ini = 0.05;                % 5% del máximo (umbral de valor inicial)
+umbral_pend = 0.01;               % pendiente mínima relativa (1%)
+centrada = false(1, size(X_Synt,2));  % vector lógico de centrado
+
+info = struct('y_ini',[],'ymax',[],'pend_rel',[]);  % para diagnóstico
+
+for k = 1:size(X_Synt,2)
+    y = X_Synt(:,k);
+    ys = smoothdata(y, 'gaussian', Wpre);
+    ymax = max(ys);
+    if ymax <= eps
+        continue  % curva plana
+    end
+    
+    % Valor inicial promedio (para evitar ruido)
+    n_ini = min(10, floor(N/20));
+    y_ini = mean(ys(1:n_ini));
+    
+    % Pendiente inicial promedio (suavizada)
+    pend_ini = mean(diff(ys(1:n_ini)));
+    pend_rel = pend_ini / ymax;
+    
+    % Guardar datos
+    info(k).y_ini = y_ini;
+    info(k).ymax = ymax;
+    info(k).pend_rel = pend_rel;
+
+    % === Criterio de centrado ===
+    % Caso 1: parte "arriba" -> centrar
+    % Caso 2: parte cerca de 0 pero ya en subida fuerte -> centrar
+    if (y_ini > umbral_ini * ymax) || ...
+       ((y_ini <= umbral_ini * ymax) && (pend_rel > umbral_pend))
+        [~, loc] = max(ys);
+        X_Synt(:,k) = circshift(y, mid - loc);
+        centrada(k) = true;
+    end
+end
+
+% Mostrar resumen de 10 curvas para verificar
+fprintf('k | y_ini | ymax | pend_rel | centrada\n');
+for k = 1:min(10,size(X_Synt,2))
+    fprintf('%2d | %.3f | %.3f | %.4f | %d\n', ...
+        k, info(k).y_ini, info(k).ymax, info(k).pend_rel, centrada(k));
+end
+
+% === Detección de 1 peak ===
+promRel = 0.03;
+minDist = max(5, round(N/15));
+idx_1peak = [];
+for k = 1:size(X_Synt,2)
+    ys = smoothdata(X_Synt(:,k),'gaussian',Wpre);
+    [pks,~] = findpeaks(ys, 'MinPeakProminence', promRel*max(ys), ...
+                             'MinPeakDistance',  minDist);
+    if numel(pks) == 1
+        idx_1peak(end+1) = k;
+    end
+end
+X_1peak = X_Synt(:, idx_1peak);
+fprintf('Curvas con 1 peak: %s\n', mat2str(idx_1peak));
+% 
+% === Gráfico de comparación para una curva ===
+% for k = [5 6 8 10 11 12 14 18 19 20 23 26 30 38 39 41 42 50 52 61 62 63 65 72 75 99];
+%     t = (1:N)';
+%     y_orig = X_Synt_raw(:,k);
+%     ysuav = smoothdata(y_orig,'gaussian',Wpre);
+% 
+%     if centrada(k)
+%         yproc = X_Synt(:,k); % curva ya centrada en el bucle
+%         label2 = 'centrada + suavizada';
+%         titulo = sprintf('Curva %d: original vs centrada+suavizada', k);
+%     else
+%         yproc = ysuav;       % sólo suavizada, sin centrar
+%         label2 = 'suavizada (sin shift)';
+%         titulo = sprintf('Curva %d: original vs suavizada (no centrada)', k);
+%     end
+% 
+%     figure;
+%     plot(t, y_orig, 'Color',[.7 .7 .7],'DisplayName','original'); hold on
+%     plot(t, yproc, 'LineWidth',1.6,'DisplayName',label2);
+%     grid on; legend('Location','best');
+%     title(titulo);
+%     xlabel('Índice'); ylabel('Valor');
+% 
+%     % Diferencia de área (para revisar magnitud del cambio)
+%     e = abs(trapz(y_orig)-trapz(yproc))/max(abs(trapz(y_orig)),eps);
+%     fprintf('Diferencia relativa de área curva %d = %.4f\n', k, e);
+% end
+% % %NUEVO PARA GAURADR
+% for k = [5 6 8 10 11 12 14 18 19 20 23 26 30 38 39 41 42 50 52 61 62 63 65 72 75 99];
+% output_dir = 'datos/curvas_procesadas_b11';
+% if ~exist(output_dir, 'dir')
+%     mkdir(output_dir);
+% end
+% 
+% t = (1:N)';                  % eje temporal (o usa t_ref si lo tienes)
+% y_orig = X_Synt_raw(:,k);    % curva original
+% ysuav = smoothdata(y_orig, 'gaussian', Wpre);
+% 
+% if centrada(k)
+%     yproc = X_Synt(:,k);     % centrada + suavizada
+%     tipo_proc = 'centrada_suavizada';
+% else
+%     yproc = ysuav;           % solo suavizada
+%     tipo_proc = 'solo_suavizada';
+% end
+% 
+% % === Guardar curva original ===
+% nombre_orig = sprintf('%s/curva_%02d_original.txt', output_dir, k);
+% curva_orig = [t, y_orig];
+% curva_orig = double(curva_orig);
+% save(nombre_orig, 'curva_orig', '-ascii', '-double');
+% 
+% % === Guardar curva procesada ===
+% nombre_proc = sprintf('%s/curva_%02d_%s.txt', output_dir, k, tipo_proc);
+% curva_proc = [t, yproc];
+% curva_proc = double(curva_proc);
+% save(nombre_proc, 'curva_proc', '-ascii', '-double');
+% 
+% fprintf('Guardadas curva %d original y procesada en "%s"\n', k, output_dir);
+% end
+
+
+% 
+% 
+% %%%estadisticas chowell 
+% 
+% tvec = (1:size(X_train,1))';pc
+% Fr = extract_features(X_train, tvec);   % reales  [n_real x 4]
+% Fs = extract_features(X_1peak,  tvec);   % sintéticos [n_sint x 4]
+% feat_names = {'AUC','Altura','T_pico','FWHM'};
+% 
+% n_real = size(Fr,1);
+% n_sint = size(Fs,1);
+% alpha = 0.05;
+% 
+% %% === Estadísticas básicas ===
+% muR = mean(Fr,1);
+% muS = mean(Fs,1);
+% 
+% varR = var(Fr,0,1);
+% varS = var(Fs,0,1);
+% 
+% semR = sqrt(varR/n_real);  % error estándar real
+% semS = sqrt(varS/n_sint);  % error estándar sintético
+% 
+% tR = tinv(1 - alpha/2, n_real-1);
+% tS = tinv(1 - alpha/2, n_sint-1);
+% 
+% ciR = [muR - tR.*semR; muR + tR.*semR];
+% ciS = [muS - tS.*semS; muS + tS.*semS];
+% 
+% fprintf('\n[Estadísticas de incertidumbre tipo Chowell]\n');
+% fprintf('Feature | mu_real ± CI95 | mu_sint ± CI95 | solapan?\n');
+% for j=1:4
+%     overlap = ~(ciS(2,j) < ciR(1,j) || ciS(1,j) > ciR(2,j)); % solapan?
+%     fprintf('%8s | %.3f [%.3f, %.3f] | %.3f [%.3f, %.3f] | %s\n', ...
+%         feat_names{j}, muR(j), ciR(1,j), ciR(2,j), muS(j), ciS(1,j), ciS(2,j), ...
+%         tern(overlap, '✓', '✗'));
+% end
+% 
+% %% === Índice de robustez (solapamiento relativo de ICs) ===
+% robust_idx = zeros(1,4);
+% for j=1:4
+%     % longitud de intersección / longitud de unión de intervalos
+%     low_int  = max(ciR(1,j), ciS(1,j));
+%     high_int = min(ciR(2,j), ciS(2,j));
+%     inter = max(0, high_int - low_int);
+%     union = max(ciR(2,j), ciS(2,j)) - min(ciR(1,j), ciS(1,j));
+%     robust_idx(j) = inter / union;
+% end
+% 
+% fprintf('\nÍndice de robustez (0 = sin solape, 1 = idénticos):\n');
+% for j=1:4
+%     fprintf('%8s : %.3f\n', feat_names{j}, robust_idx(j));
+% end
+% 
+% %% === Visualización de intervalos ===
+% figure;
+% for j=1:4
+%     subplot(2,2,j); hold on; box on;
+%     % barras de IC reales y sintéticas
+%     errorbar(1, muR(j), muR(j)-ciR(1,j), ciR(2,j)-muR(j), 'o', 'LineWidth',1.5, 'Color','b');
+%     errorbar(2, muS(j), muS(j)-ciS(1,j), ciS(2,j)-muS(j), 'o', 'LineWidth',1.5, 'Color','r');
+%     xlim([0.5 2.5]);
+%     set(gca,'XTick',[1 2],'XTickLabel',{'Real','Sint'});
+%     title(feat_names{j});
+%     ylabel('Valor ± IC95');
+% end
+% sgtitle('Comparación de medias e intervalos de confianza (tipo Chowell)');
+% 
+% %% === Guardar resultados ===
+% T = table(muR', ciR(1,:)', ciR(2,:)', muS', ciS(1,:)', ciS(2,:)', robust_idx', ...
+%     'VariableNames', {'MuReal','CIReal_low','CIReal_high','MuSint','CISint_low','CISint_high','RobustIndex'}, ...
+%     'RowNames', feat_names);
+% disp(T);
+% writetable(T, 'resultados_comparacion/tabla_incertidumbre.csv', 'WriteRowNames', true);
+% 
+% %IGNORAR ESTE % si no tienes vector t, usa índices: 
+% tvec = (1:size(X_train,1))'; % Extraer features 
+% Fr = extract_features(X_train, tvec); % reales [n_real x 4] 
+% Fs = extract_features(X_1peak, tvec); % sintéticos [n_sint x 4] % nombre de columnas para imprimir/plot 
+% feat_names = {'AUC','Altura','T_pico','FWHM'}; n_real = size(Fr,1); alpha = 0.05; muR = mean(Fr,1); sR = std(Fr,0,1); semR = sR ./ sqrt(n_real); tval = tinv(1-alpha/2, n_real-1); ciR_low = muR - tval.*semR; ciR_high = muR + tval.*semR; % imprimir 
+% for j=1:4 
+%     fprintf('%s : Real mu=%.3f (CI95 [%.3f, %.3f])\n', feat_names{j}, muR(j), ciR_low(j), ciR_high(j)); 
+% end 
+% R = 2000; % repeticiones (2000 es razonable) 
+% mus = zeros(R,4); n_samp = n_real; % muestreamos el mismo tamaño que reales 
+% n_sint = size(Fs,1); 
+% for r = 1:R 
+%     idx = randperm(n_sint, n_samp); % sin reemplazo 
+%     mus(r,:) = mean(Fs(idx,:), 1); 
+% end % p_out = proporción de medias sintéricas fuera del IC real (por feature) 
+% p_out = mean( mus < ciR_low | mus > ciR_high , 1); disp('Proporción de medias synth fuera del IC real por feature:'); 
+% for j=1:4 
+%     fprintf('%s: %.3f\n', feat_names{j}, p_out(j)); 
+% end 
+% out_dir = 'resultados_comparacion'; 
+% if ~exist(out_dir,'dir'), mkdir(out_dir); end 
+% for j = 1:4
+%     figure('Color','w');  % Fondo blanco
+%     h = histogram(mus(:,j), 30, 'Normalization','pdf', ...
+%         'FaceColor',[0.8 0.4 0.1], 'FaceAlpha',0.5, ...
+%         'EdgeColor','none', 'DisplayName','Medias sintéticas');
+%     hold on; box on; grid on;
+% 
+%     % Líneas verticales de referencia
+%     yl = ylim;
+%     plot([muR(j) muR(j)], yl, 'k-', 'LineWidth',1.8, 'DisplayName','Media real');
+%     plot([mean(mus(:,j)) mean(mus(:,j))], yl, 'r--', 'LineWidth',1.8, 'DisplayName','Media sintética (prom.)');
+%     plot([ciR_low(j) ciR_low(j)], yl, 'b:', 'LineWidth',1.5, 'DisplayName','IC95 real');
+%     plot([ciR_high(j) ciR_high(j)], yl, 'b:', 'LineWidth',1.5);
+% 
+%     % Ajuste automático del eje X para ver el solape completo
+%     margin = 0.1 * range([ciR_low(j), ciR_high(j), mean(mus(:,j))]);
+%     xlim([min([ciR_low(j), min(mus(:,j))]) - margin, ...
+%           max([ciR_high(j), max(mus(:,j))]) + margin]);
+% 
+%     xlabel(feat_names{j}, 'FontWeight','bold');
+%     ylabel('Densidad', 'FontWeight','bold');
+%     title(sprintf('%s: comparación de medias sintéticas vs. IC95 real', feat_names{j}), 'FontWeight','bold');
+%     legend('Location','best');
+% 
+% 
+% end
+% 
+% rel_error = norm(muR - mean(mus,1)) / norm(muR); 
+% fprintf('Error relativo entre medias (norma L2) = %.4f\n', rel_error); % también imprime tabla simple 
+% T = table(muR', mean(mus,1)', p_out', 'VariableNames', {'MuReal','MuSynthMean','PropOutCI'}); 
+% T.Properties.RowNames = feat_names; 
+% disp(T); 
+% writetable(T, fullfile(out_dir,'resumen_features.csv'),'WriteRowNames',true);
+% 
+% 
+% 
+% %%%%otro
+% % 1) Comparar distribuciones de AUC
+% AUC_real  = trapz(tvec, X_train);   % vector 1 x n_real
+% AUC_sint  = trapz(tvec, X_1peak);    % vector 1 x n_sint
+% fprintf('mean AUC real = %.3f, mean AUC sint = %.3f\n', mean(AUC_real), mean(AUC_sint));
+% figure; histogram(AUC_real,30); hold on; histogram(AUC_sint,30); legend('real','sint'); title('AUC');
+% 
+% % 2) Scatter AUC real vs sintéticos pareados (si emparejaste)
+% scatter(AUC_real, AUC_sint(1:numel(AUC_real))); xlabel('AUC real'); ylabel('AUC sint');
+% 
+% % 3) Verifica preprocesos: ¿usa mismo t y misma interpolación?
+% % Por ejemplo: comparar maxima por curva
+% max_real = max(X_train);
+% max_sint = max(X_1peak);

@@ -1,0 +1,9 @@
+function V=LU_weno5_per(X,h)
+I=length(X);
+X = [X(I-3:I-1); X; X(2:3)];
+I=length(X);
+i=3:I-2;
+F=weno5(X(i-2),X(i-1),X(i),X(i+1),X(i+2));
+I=length(F);
+i=1:I-1;
+V = -(F(i+1)-F(i))/h;

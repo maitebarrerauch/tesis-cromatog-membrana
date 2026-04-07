@@ -1,0 +1,51 @@
+dataStruct = load('merge-data-trace/matriz_curvas_b1_m.mat');
+C_tmp = dataStruct.C;
+%Criterio selection: ej: por mayores areas de curvas max{I} ó I > 0.0 ó I > mean(I), 
+% que tenga un significado "biotecnológico, mayor probabilidad de ser elution, etc.." la elección de metrica de "selección de curvas".
+[salidaB1m] = selectionCurves(C_tmp);
+
+dataStruct = load('merge-data-trace/matriz_curvas_b1_m.mat');
+C_tmp = dataStruct.C;
+%Criterio selection: ej: por mayores areas de curvas max{I} ó I > 0.0 ó I > mean(I), 
+% que tenga un significado "biotecnológico, mayor probabilidad de ser elution, etc.." la elección de metrica de "selección de curvas".
+[salidaB1m] = selectionCurves(C_tmp);
+
+dataStruct = load('merge-data-trace/matriz_curvas_b1_m.mat');
+C_tmp = dataStruct.C;
+%Criterio selection: ej: por mayores areas de curvas max{I} ó I > 0.0 ó I > mean(I), 
+% que tenga un significado "biotecnológico, mayor probabilidad de ser elution, etc.." la elección de metrica de "selección de curvas".
+[salidaB1m] = selectionCurves(C_tmp);
+
+dataStruct = load('merge-data-trace/matriz_curvas_b1_m.mat');
+C_tmp = dataStruct.C;
+%Criterio selection: ej: por mayores areas de curvas max{I} ó I > 0.0 ó I > mean(I), 
+% que tenga un significado "biotecnológico, mayor probabilidad de ser elution, etc.." la elección de metrica de "selección de curvas".
+[salidaB1m] = selectionCurves(C_tmp);
+
+dataStruct = load('merge-data-trace/matriz_curvas_b1_m.mat');
+C_tmp = dataStruct.C;
+%Criterio selection: ej: por mayores areas de curvas max{I} ó I > 0.0 ó I > mean(I), 
+% que tenga un significado "biotecnológico, mayor probabilidad de ser elution, etc.." la elección de metrica de "selección de curvas".
+[salidaB1m] = selectionCurves(C_tmp);
+
+dataStruct = load('merge-data-trace/matriz_curvas_b1_m.mat');
+C_tmp = dataStruct.C;
+%Criterio selection: ej: por mayores areas de curvas max{I} ó I > 0.0 ó I > mean(I), 
+% que tenga un significado "biotecnológico, mayor probabilidad de ser elution, etc.." la elección de metrica de "selección de curvas".
+[salidaB1m] = selectionCurves(C_tmp);
+
+
+
+
+%varNames = fieldnames(dataStruct);          % obtiene nombres de variables
+% newNames = regexprep(varNames, 'p0_*(\d+)', 'P$1');
+% numbers = cellfun(@(s) str2double(regexp(s,'\d+','match','once')), newNames');
+
+% dataCell  = struct2cell(dataStruct);        % convierte cada variable en una celda
+% dataCell ahora es un cell array donde cada celda tiene una variable del archivo
+% Convertir a una gran matriz 3D (si todas son del mismo tamaño)
+%dataMatrix = cat(3, dataCell{:});
+%paramsMatrixSurf = reshape(dataMatrix, [numel(dataMatrix(:,:,1)), size(dataMatrix,3)]);
+%paramsMatrixSurf = [single(paramsMatrixSurf);numbers];
+
+

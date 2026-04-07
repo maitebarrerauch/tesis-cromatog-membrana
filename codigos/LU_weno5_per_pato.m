@@ -1,0 +1,11 @@
+function V=LU_weno5_per_pato(X,h)
+I=length(X);
+X = [X(I-1); X; X(2)];
+X = [X(I-1); X; X(2)];
+X = [X(I-1); X];
+I=length(X);
+i=3:I-2;
+F=weno5(X(i-2),X(i-1),X(i),X(i+1),X(i+2));
+I=length(F);
+i=2:I;
+V = -(F(i)-F(i-1))/h;

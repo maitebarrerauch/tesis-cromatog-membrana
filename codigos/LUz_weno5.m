@@ -1,0 +1,29 @@
+%% Función que calcula el flujo numérico de U para método weno de orden 5
+% Sólo considera velocidad positiva en dicha dirección
+% flag es el orden de la extrapolación en el borde (flag=5 es recom.)
+% C es el valor de la condición de borde Dirichlet en la entrada de la col.
+function V=LUz_weno5(U,flag,C,h)
+Um=U;
+% Um=extension_2025(Um,flag,C);
+% Um=extension_2025(Um,flag,C);
+% Um=extension_weno5_2025(Um,flag,0,C);
+%%
+%% Second-order extrapolation using a linear polynomial satisfying BC
+% I=length(Um);
+%Um=[-Um(3)+2*C; -Um(2)+2*C; -Um(1)+2*C; Um ; 3*Um(I)-3*Um(I-1)+Um(I-2)];
+% I=length(Um);
+% Um=[ Um; 3*Um(I)-3*Um(I-1)+Um(I-2)];
+%% Modif. de lo anterior en la salida
+I=length(Um);
+Um=[-Um(3)+2*C; -Um(2)+2*C; -Um(1)+2*C; Um ; Um(I); Um(I)];
+%% Third order extrapolation
+% Um(1)=C;
+% Um=[3*Um(1)-3*Um(2)+Um(3); Um ; Um(I-1); Um(I-2)];
+% Um=[3*Um(1)-3*Um(2)+Um(3); Um];
+% Um=[3*Um(1)-3*Um(2)+Um(3); Um];
+I=length(Um);
+i=3:I-2;
+F=weno5(Um(i-2),Um(i-1),Um(i),Um(i+1),Um(i+2));
+I=length(F);
+i=2:I;
+V = -(F(i)-F(i-1))/h;
